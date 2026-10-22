@@ -407,3 +407,52 @@ STOP    B       STOP                  ; Infinite loop
         END
 
 ```
+
+
+## While Loop Structure
+
+While loops check the condition before executing the loop body, potentially executing zero times if the initial condition is false. This type of loop is useful when the number of iterations is not known in advance and depends on dynamic conditions.
+
+### Complete Executable Code
+
+Here is the complete runnable program for the **TM4C123GH6PM** board:
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP
+        DCD     Reset_Handler          ; Reset vector
+
+; Data section containing null-terminated string
+        AREA    M_DATA, DATA, READONLY
+mystring DCB    "Hello World!", 0     ; Null-terminated string (12 characters + 1 null byte)
+
+; Code section
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+Reset_Handler
+
+        ; Initialization
+        LDR     R0, =mystring         ; R0 = pointer to string
+        MOV     R1, #0                ; R1 = character count = 0
+
+while_start
+        LDRB    R2, [R0], #1          ; Load byte into R2, post-increment R0 pointer by 1
+        CMP     R2, #0                ; Check if byte is null terminator (\0)
+        BEQ     while_end             ; Exit loop if null terminator reached
+
+        ADD     R1, R1, #1            ; Increment count: R1++
+        B       while_start           ; Repeat loop
+
+while_end
+        ; R1 now holds 12 (0x0C), the total length of "Hello World!"
+
+STOP    B       STOP                  ; Infinite loop
+        END
+
+```
