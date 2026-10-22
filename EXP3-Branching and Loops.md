@@ -386,6 +386,8 @@ Reset_Handler
         LDR     R3, =array            ; R3 = base address of array
 
 for_start
+
+        ; Condition check
         CMP     R0, #length           ; Compare i with length (5)
         BGE     for_end               ; Branch to for_end if i >= 5
 
@@ -393,6 +395,7 @@ for_start
         LDR     R2, [R3, R0, LSL #2]  ; R2 = array[i]
         ADD     R1, R1, R2            ; R1 (sum) += R2
 
+        ; Increment
         ADD     R0, R0, #1            ; i++
         B       for_start             ; Repeat
 
