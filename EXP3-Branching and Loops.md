@@ -284,6 +284,9 @@ This means the processor jumps backward to an earlier instruction. Such negative
 
 
 ```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
         AREA    RESET, CODE, READONLY
         EXPORT  __Vectors
 __Vectors
@@ -323,59 +326,7 @@ Target_Label
 
 STOP    B       STOP                  ; Forward branch offset = -2 (jumps to itself)
         END
-
 ```
-
----
-
-### Step-by-Step Breakdown of What Happens in the CPU
-
-When you compile and debug this code in Keil, open **View $\rightarrow$ Disassembly**:
-
-#### 1. What the CPU Sees (Example Addresses)
-
-Suppose Keil places `Target_Label` and `BNE` at the following memory addresses:
-
-| Label / Instruction | Address | Machine Code / Encoding |
-| --- | --- | --- |
-| `Target_Label: SUBS R0, R0, #1` | `0x00000208` | `1E40` |
-| `BNE Target_Label` | `0x0000020A` | `D1FD` |
-
-#### 2. The Math behind the `BNE` Encoding (`D1FD`)
-
-When the processor evaluates `BNE` at address `0x0000020A`:
-
-1. **Current Instruction Address:** `0x0000020A`
-2. **Current PC Value:** $\text{Address} + 4 = \text{0x0000020A} + 4 = \mathbf{\text{0x0000020E}}$
-3. **Target Address Wanted:** `0x00000208`
-4. **Calculated Offset:**
-
-$$\text{Target} - \text{PC} = \text{0x00000208} - \text{0x0000020E} = \mathbf{-6 \text{ bytes}}$$
-
-
-
-The assembler encodes this negative offset ($-6$) into the `BNE` opcode (`0xFD` in two's complement form divided by halfwords).
-
-#### 3. How to Verify in Keil
-
-1. Start Debugger (**Ctrl + F5**).
-2. Open **Disassembly** window.
-3. Single step (**F11**) until the PC reaches the `BNE` instruction.
-4. Look at the **Registers Window** $\rightarrow$ **PC**: you will see the PC is already **4 bytes ahead** of the highlighted `BNE` instruction line.
-5. Step once more: the PC moves backward directly to `0x00000208`.
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ### Condition Codes
 
@@ -401,3 +352,54 @@ Conditional branches use condition codes that test the processor status flags ($
 | **LE** | Less or equal (signed) | Execute if $Z = 1$ or $N \neq V$. |
 | **AL** | Always | Always execute (default if no condition). |
 | **NV** | Never | Reserved / do not use. |
+
+
+## For Loop Structure
+
+A typical `for` loop has the structure: **initialization**, **condition check**, **body execution**, and **increment/decrement**. This type of loop executes a known number of times.
+
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP
+        DCD     Reset_Handler          ; Reset vector
+
+; Data section containing array
+        AREA    M_DATA, DATA, READONLY
+array   DCD     10, 20, 30, 40, 50    ; Array of 5 integers (32-bit each)
+length  EQU     5                     ; Number of elements
+
+; Code section
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+Reset_Handler
+
+        ; Initialization
+        MOV     R0, #0                ; R0 = i = 0
+        MOV     R1, #0                ; R1 = sum = 0
+        LDR     R3, =array            ; R3 = base address of array
+
+for_start
+        CMP     R0, #length           ; Compare i with length (5)
+        BGE     for_end               ; Branch to for_end if i >= 5
+
+        ; Load array[i] using scaled register-offset: EA = R3 + (R0 * 4)
+        LDR     R2, [R3, R0, LSL #2]  ; R2 = array[i]
+        ADD     R1, R1, R2            ; R1 (sum) += R2
+
+        ADD     R0, R0, #1            ; i++
+        B       for_start             ; Repeat
+
+for_end
+        ; R1 now contains sum = 10 + 20 + 30 + 40 + 50 = 150 (0x96)
+
+STOP    B       STOP                  ; Infinite loop
+        END
+
+```
