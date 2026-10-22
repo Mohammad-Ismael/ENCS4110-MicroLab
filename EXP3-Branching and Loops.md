@@ -391,6 +391,7 @@ for_start
         CMP     R0, #length           ; Compare i with length (5)
         BGE     for_end               ; Branch to for_end if i >= 5
 
+        ; body execution
         ; Load array[i] using scaled register-offset: EA = R3 + (R0 * 4)
         LDR     R2, [R3, R0, LSL #2]  ; R2 = array[i]
         ADD     R1, R1, R2            ; R1 (sum) += R2
