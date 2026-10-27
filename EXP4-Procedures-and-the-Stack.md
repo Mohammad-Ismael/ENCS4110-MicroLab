@@ -81,3 +81,53 @@ AddTwo  PROC
 *Note: The `PROC` and `ENDP` directives help define the start and end of a procedure and they could be safely omitted.*
 
 ---
+
+## Procedure with Preserved Registers
+
+When a procedure uses callee-saved registers (R4–R11), it must preserve their original values by saving them on the stack and restoring them before returning:
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP (example top-of-stack)
+        DCD     Reset_Handler          ; Reset vector
+
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+
+Reset_Handler
+        ; Set up example parameters for ProcessArray
+        LDR     R0, =SampleArray       ; Load address of array into R0 (1st parameter)
+        MOV     R1, #5                 ; Pass array length into R1 (2nd parameter)
+
+        ; Call procedure (AAPCS guarantees R4-R6 remain untouched after this call)
+        BL      ProcessArray           ; Result stored in R0
+
+STOP    B       STOP
+
+; Listing 4.2: Procedure using preserved registers
+ProcessArray PROC
+        PUSH    {R4-R6, LR}            ; Save used registers and LR
+        MOV     R4, R0                 ; Save array pointer
+        MOV     R5, R1                 ; Save array length
+        MOV     R6, #0                 ; Initialize counter
+
+        ; Process array using R4, R5, R6...
+
+        MOV     R0, R6                 ; Return counter value
+        POP     {R4-R6, PC}            ; Restore registers and return
+        ENDP
+
+        AREA    MYDATA, DATA, READWRITE
+SampleArray
+        DCD     10, 20, 30, 40, 50
+
+        END
+
+```
+---
