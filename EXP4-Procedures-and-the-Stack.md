@@ -411,3 +411,130 @@ STOP    B       STOP
 Explanation: In Figure 4.2(a), the stack contains values saved earlier. Executing POP {R6-R8} reclaims 12 bytes of stack space (three registers) by moving SP upward in memory (Figure 4.2(b)). Then, as shown in Figure 4.2(c), registers are restored following the rule: the lowest-numbered register (R6) comes from the lowest address, followed by R7 and R8 from higher addresses. After the last load, SP points to the top of the reclaimed block, completing the reversal of the earlier push.
 
 Note: This figure deliberately reuses the stack contents from the earlier PUSH {R0, R2, R4, LR} example, relabeling them R6/R7/R8 to illustrate that POP restores registers by address, not by the name they were pushed under — it is not meant to represent the same code sequence continuing.
+
+---
+
+## Procedure
+
+### Examples
+
+#### Example 1: Nested Uppercase Counter
+
+This example demonstrates a nested call: `CountUpperNested(ptr)` scans a null-terminated string and calls `IsUpper(ch)` for each character. It shows saving/restoring LR and using callee-saved registers (R4 for the running count, R5 for the scan pointer). Both values must survive the `BL IsUpper` call, so under the AAPCS they cannot be kept in caller-saved registers like R0–R3. Compare it with Example 2 of Experiment 3, which counts the same letters inline with no procedures.
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP (example top-of-stack)
+        DCD     Reset_Handler          ; Reset vector
+
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+
+IsUpper ; IsUpper(R0 = ch) -> R0 = 1 if 'A'..'Z', else 0
+        CMP     R0, #'A'
+        BLT     not_upper
+        CMP     R0, #'Z'
+        BGT     not_upper
+        MOV     R0, #1
+        BX      LR
+not_upper
+        MOV     R0, #0
+        BX      LR
+
+CountUpperNested ; CountUpperNested(R0 = ptr) -> R0 = Upper Count
+        PUSH    {R4, R5, LR}          ; save callee-saved regs + return address
+        MOV     R5, R0                ; R5 = ptr (callee-saved: must survive the BL below)
+        MOV     R4, #0                ; R4 = count
+cu_next
+        LDRB    R0, [R5], #1          ; R0 = *ptr++; post-increment pointer in R5
+        CBZ     R0, cu_done           ; if null terminator, finish
+        BL      IsUpper               ; R0 = 0/1 based on 'A'..'Z' (R0-R3 are caller-saved: may be clobbered)
+        ADD     R4, R4, R0            ; count += result
+        B       cu_next
+cu_done
+        MOV     R0, R4                ; return count in R0
+        POP     {R4, R5, PC}
+
+Reset_Handler
+        LDR     R0, =mystring
+        BL      CountUpperNested
+        LDR     R2, =UPPERCOUNT
+        STR     R0, [R2]
+
+STOP    B       STOP
+
+        AREA    CONSTANTS, DATA, READONLY
+mystring DCB    "Hello ARM World!", 0 ; Uppercase: H, A, R, M, W -> 5
+
+        AREA    MYDATA, DATA, READWRITE
+UPPERCOUNT SPACE 4                   ; should be 5
+
+        END
+
+```
+
+*Check: Verify that `UPPERCOUNT` contains 5 for the test string.*
+
+
+#### Example 2: Integer to Decimal String with the Stack
+
+`UIntToStr(value, buf)` converts an unsigned integer into a null-terminated decimal ASCII string and returns the number of digits in `R0`. It finds each digit by dividing by 10 (`UDIV`, then `MLS` for the remainder), and this produces the digits in reverse order, least-significant first. Pushing each digit and then popping them all back reverses that order again, because the stack is last-in, first-out. Each `PUSH {R12}` takes a full 4-byte word even though it holds only one character. Because every push is matched by a pop, SP returns to its starting value before the final `POP {R4, PC}`.
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP (example top-of-stack)
+        DCD     Reset_Handler          ; Reset vector
+
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+
+UIntToStr ; UIntToStr(R0 = value, R1 = buf) -> R0 = digit count
+        PUSH    {R4, LR}              ; save callee-saved R4 and the return address
+        MOV     R2, #0                ; R2 = digit count
+        MOV     R3, #10               ; R3 = divisor
+its_div
+        UDIV    R4, R0, R3            ; R4 = value / 10
+        MLS     R12, R4, R3, R0       ; R12 = value - (value / 10) * 10 = value % 10
+        ADD     R12, R12, #'0'        ; digit -> ASCII character
+        PUSH    {R12}                 ; digits are produced least-significant first...
+        ADD     R2, R2, #1            ; count++
+        MOV     R0, R4                ; value = value / 10
+        CMP     R0, #0
+        BNE     its_div               ; repeat until value is 0 (value 0 still gives "0")
+        MOV     R0, R2                ; return value = digit count
+its_pop
+        POP     {R12}                 ; ...so popping returns them most-significant first
+        STRB    R12, [R1], #1         ; *buf++ = character
+        SUBS    R2, R2, #1            ; count--
+        BNE     its_pop
+        MOV     R12, #0
+        STRB    R12, [R1]             ; null terminator
+        POP     {R4, PC}              ; restore R4 and return (SP is back where it started)
+
+Reset_Handler
+        LDR     R0, =40213            ; value to convert
+        LDR     R1, =NUMSTR           ; destination buffer in RAM
+        BL      UIntToStr             ; R0 = 5, NUMSTR = "40213"
+
+STOP    B       STOP
+
+        AREA    MYDATA, DATA, READWRITE
+NUMSTR  SPACE   12                    ; up to 10 digits + null (written before it is read)
+
+        END
+
+```
+
+*Check: Verify that `R0` = 5 after the call, and open a Memory window at `NUMSTR` to confirm the bytes `34 30 32 31 33 00` ("40213"). Single-step the first loop with the Registers window open and watch SP drop by 4 for each digit. Then confirm that it climbs back during the second loop. Try the value 0 as well; the result should be "0".*
