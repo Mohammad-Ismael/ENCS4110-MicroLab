@@ -319,7 +319,7 @@ The `PUSH` instruction saves one or more registers onto the stack in a single op
         AREA    RESET, CODE, READONLY
         EXPORT  __Vectors
 __Vectors
-        DCD     0x20001000            ; Initial SP (example top-of-stack)
+        DCD     0x20001000            ; Initial SP (top-of-stack in RAM)
         DCD     Reset_Handler          ; Reset vector
 
         AREA    MYCODE, CODE, READONLY
@@ -328,20 +328,86 @@ __Vectors
 
 Reset_Handler
         ; Load sample values into registers
-        MOV     R0, #0x11
-        MOV     R2, #0x22
-        MOV     R4, #0x44
-        MOV     LR, #0x99
+        LDR     R0, =0x11111111       ; Value to store in R0
+        LDR     R2, =0x22222222       ; Value to store in R2
+        LDR     R4, =0x44444444       ; Value to store in R4
+        LDR     LR, =0x99999999       ; Value to store in LR
 
-        ; Example: PUSH {R4, R0, R2, LR}
-        ; Even if the list appears unordered, values are laid out by register number:
-        ; R0 (lowest address), then R2, R4, and LR (highest address).
-        ; Each register occupies 4 bytes, so SP decreases by 16 bytes in total.
-        ; The program counter (PC) cannot be pushed by this instruction.
+        ; Initial SP = 0x20001000
+        ; Executing: PUSH {R4, R0, R2, LR}
+        ; SP decreases by 16 bytes (4 registers x 4 bytes) -> New SP = 0x20000FF0
         PUSH    {R4, R0, R2, LR}
+
+        ; Memory layout on the full descending stack:
+        ; ---------------------------------------------------------------------
+        ; Address       | Register | Value       | Description
+        ; ---------------------------------------------------------------------
+        ; 0x20001000    | (Old SP) | ------------| Original top of stack
+        ; ---------------------------------------------------------------------
+        ; 0x20000FFC    | LR (R14) | 0x99999999  | Highest Address (SP + 12)
+        ; 0x20000FF8    | R4       | 0x44444444  | Second Highest  (SP + 8)
+        ; 0x20000FF4    | R2       | 0x22222222  | Second Lowest   (SP + 4)
+        ; 0x20000FF0    | R0       | 0x11111111  | Lowest Address  (SP + 0)
 
 STOP    B       STOP
         END
 ```
 
 ![Stack operation sequence for PUSH.png](./Figers/Stack-operation-sequence-for-PUSH.png)
+
+**Explanation:** Figure 4.1(a) shows the empty stack with SP at the top (highest address). When `PUSH` executes, the processor decrements SP by 16 bytes to reserve space for four registers (Figure 4.1(b)). Finally, in Figure 4.1(c), values are stored according to the rule: the lowest-numbered register (R0) at the lowest address, then R2 and R4, and the highest-numbered (LR) at the highest address. Because the stack grows downward, SP points to the last written word after the operation.
+
+#### POP
+
+The `POP` instruction restores one or more registers from the stack. Conceptually, the processor reads each value from the addresses currently covered by SP and then releases that stack space.
+
+**Rule:** `POP` loads registers from the stack such that the lowest-numbered register is restored from the lowest memory address, and the highest-numbered register from the highest memory address. After all specified registers are restored, SP has increased by 4 bytes per register.
+
+**Example:**
+
+```assembly
+; PCB Used: EK-TM4C123GXL
+; MCU Used: TM4C123GH6PM
+; MPU Used: ARM Cortex M4F - ARMv7-M
+        AREA    RESET, CODE, READONLY
+        EXPORT  __Vectors
+__Vectors
+        DCD     0x20001000            ; Initial SP (example top-of-stack)
+        DCD     Reset_Handler          ; Reset vector
+
+        AREA    MYCODE, CODE, READONLY
+        ENTRY
+        EXPORT  Reset_Handler
+
+Reset_Handler
+        ; Step 1: Pre-fill R6, R7, R8 with sample data
+        LDR     R6, =0x66666666
+        LDR     R7, =0x77777777
+        LDR     R8, =0x88888888
+
+        ; Step 2: Push registers to stack (SP decreases by 12 bytes)
+        PUSH    {R6-R8}
+
+        ; Step 3: Clear registers to show that POP actually restores them
+        MOV     R6, #0
+        MOV     R7, #0
+        MOV     R8, #0
+
+        ; Example: POP {R6-R8}
+        ; This restores R6, then R7, then R8 from successively higher addresses;
+        ; the stack pointer increases by 12 bytes overall. If PC is included in the list,
+        ; the loaded value becomes the new program counter, returning from the current procedure.
+        POP     {R6-R8}
+
+STOP    B       STOP
+        END
+
+```
+
+---
+
+![Stack operation sequence for POP](./Figers/Stack%20operation%20sequence%20for%20POP.png)
+
+Explanation: In Figure 4.2(a), the stack contains values saved earlier. Executing POP {R6-R8} reclaims 12 bytes of stack space (three registers) by moving SP upward in memory (Figure 4.2(b)). Then, as shown in Figure 4.2(c), registers are restored following the rule: the lowest-numbered register (R6) comes from the lowest address, followed by R7 and R8 from higher addresses. After the last load, SP points to the top of the reclaimed block, completing the reversal of the earlier push.
+
+Note: This figure deliberately reuses the stack contents from the earlier PUSH {R0, R2, R4, LR} example, relabeling them R6/R7/R8 to illustrate that POP restores registers by address, not by the name they were pushed under — it is not meant to represent the same code sequence continuing.
