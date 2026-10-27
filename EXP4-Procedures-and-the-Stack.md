@@ -84,6 +84,8 @@ AddTwo  PROC
 
 ## Procedure with Preserved Registers
 
+![AAPCS Registers Usage](image.png)
+
 When a procedure uses callee-saved registers (R4–R11), it must preserve their original values by saving them on the stack and restoring them before returning:
 
 ```assembly
