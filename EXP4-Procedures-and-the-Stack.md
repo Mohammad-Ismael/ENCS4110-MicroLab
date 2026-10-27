@@ -81,10 +81,9 @@ AddTwo  PROC
 *Note: The `PROC` and `ENDP` directives help define the start and end of a procedure and they could be safely omitted.*
 
 ---
-
 ## Procedure with Preserved Registers
 
-![AAPCS Registers Usage](image.png)
+![AAPCS Registers Usage](./Figers/AAPCS%20Registers%20Usage.png)
 
 When a procedure uses callee-saved registers (R4–R11), it must preserve their original values by saving them on the stack and restoring them before returning:
 
